@@ -3,7 +3,7 @@ package cache
 import "errors"
 
 const (
-	NAME = "cache"
+	NAME = "CACHE"
 )
 
 var (
