@@ -36,7 +36,8 @@ type (
 		hashring *util.HashRing
 	}
 
-	Config struct {
+	Configs map[string]Config
+	Config  struct {
 		Driver  string
 		Weight  int
 		Prefix  string
@@ -50,92 +51,42 @@ type (
 	}
 )
 
-func (this *Module) Read(key string) (Any, error) {
-	locate := module.hashring.Locate(key)
+// Driver 注册驱动
+func (this *Module) Driver(name string, driver Driver, override bool) {
+	this.mutex.Lock()
+	defer this.mutex.Unlock()
 
-	if inst, ok := module.instances[locate]; ok {
-		key := inst.config.Prefix + key //加前缀
-		return inst.connect.Read(key)
+	if driver == nil {
+		panic("Invalid cache driver: " + name)
 	}
 
-	return nil, errInvalidCacheConnection
-}
-
-func (this *Module) Exists(key string) (bool, error) {
-	locate := module.hashring.Locate(key)
-
-	if inst, ok := module.instances[locate]; ok {
-		key := inst.config.Prefix + key //加前缀
-		return inst.connect.Exists(key)
-	}
-
-	return false, errInvalidCacheConnection
-}
-
-// Write 写缓存
-func (this *Module) Write(key string, val Any, expiries ...time.Duration) error {
-	locate := module.hashring.Locate(key)
-
-	if inst, ok := module.instances[locate]; ok {
-		expiry := inst.config.Expiry
-		if len(expiries) > 0 {
-			expiry = expiries[0]
-		}
-
-		//KEY加上前缀
-		key := inst.config.Prefix + key
-
-		return inst.connect.Write(key, val, expiry)
-	}
-
-	return errInvalidCacheConnection
-}
-
-// Delete 删除缓存
-func (this *Module) Delete(key string) error {
-	locate := module.hashring.Locate(key)
-
-	if inst, ok := module.instances[locate]; ok {
-		key := inst.config.Prefix + key
-		return inst.connect.Delete(key)
-	}
-
-	return errInvalidCacheConnection
-}
-
-// Serial 生成序列编号
-func (this *Module) Serial(key string, start, step int64) (int64, error) {
-	locate := module.hashring.Locate(key)
-
-	if inst, ok := module.instances[locate]; ok {
-		key := inst.config.Prefix + key
-		return inst.connect.Serial(key, start, step)
-	}
-
-	return -1, errInvalidCacheConnection
-}
-
-// Keys 获取所有前缀的KEYS
-func (this *Module) Keys(prefix string) ([]string, error) {
-	keys := make([]string, 0)
-
-	for _, inst := range module.instances {
-		prefix := inst.config.Prefix + prefix
-		temps, err := inst.connect.Keys(prefix)
-		if err == nil {
-			keys = append(keys, temps...)
+	if override {
+		this.drivers[name] = driver
+	} else {
+		if this.drivers[name] == nil {
+			this.drivers[name] = driver
 		}
 	}
-
-	return keys, nil
 }
 
-// Clear 按前缀清理缓存
-func (this *Module) Clear(prefix string) error {
-	for _, inst := range module.instances {
-		prefix := inst.config.Prefix + prefix
-		inst.connect.Clear(prefix)
+func (this *Module) Config(name string, config Config, override bool) {
+	this.mutex.Lock()
+	defer this.mutex.Unlock()
+
+	if name == "" {
+		name = chef.DEFAULT
 	}
 
-	return errInvalidCacheConnection
+	if override {
+		this.configs[name] = config
+	} else {
+		if _, ok := this.configs[name]; ok == false {
+			this.configs[name] = config
+		}
+	}
+}
+func (this *Module) Configs(name string, config Configs, override bool) {
+	for key, val := range config {
+		this.Config(key, val, override)
+	}
 }
