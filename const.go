@@ -7,5 +7,6 @@ const (
 )
 
 var (
+	//
 	errInvalidCacheConnection = errors.New("Invalid cache connection.")
 )
